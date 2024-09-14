@@ -7,8 +7,6 @@ class ESP32Data(models.Model):
     param1 = models.FloatField(null=True,blank=True)
     param2 = models.FloatField(null=True,blank=True)
     param3 = models.FloatField(null=True,blank=True)
-    param4 = models.FloatField(null=True,blank=True)
-    param5 = models.FloatField(null=True,blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     prediction = models.CharField(max_length=255,null=True,blank=True)
     predicted = models.BooleanField(default=False,null=True,blank=True)
