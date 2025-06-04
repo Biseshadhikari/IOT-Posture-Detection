@@ -5,6 +5,11 @@ from sklearn.preprocessing import LabelEncoder
 loaded_rf_classifier = joblib.load('random_forest_model.pkl')
 loaded_label_encoder = joblib.load('label_encoder.pkl')
 
+
+print("MODEL DEATILS: ")
+print(type(loaded_rf_classifier))
+print(dir(loaded_rf_classifier))
+
 feature_data = [[9.17,3.06,3.17]]
 
 y_pred = loaded_rf_classifier.predict(feature_data)

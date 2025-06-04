@@ -87,7 +87,9 @@ def predict_view(request):
             single_data.prediction = prediction
             single_data.predicted = True
             single_data.save()
-
+            # // deleting stale data
+            
+            latest_data.exclude(id=single_data.id).delete()
             # Render the prediction in the template
             return render(request, 'predictions.html', {
                 'param1': param1,
