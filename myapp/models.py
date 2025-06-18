@@ -1,9 +1,9 @@
 from django.db import models
-
+from django.contrib.auth.models import User
 # Create your models here.
-from django.db import models
 
 class ESP32Data(models.Model):
+    user  = models.ForeignKey(User,on_delete=models.SET_NULL,null = True,blank=True)
     param1 = models.FloatField(null=True,blank=True)
     param2 = models.FloatField(null=True,blank=True)
     param3 = models.FloatField(null=True,blank=True)

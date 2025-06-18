@@ -3,49 +3,74 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from .models import ESP32Data
 import joblib
+import pandas as pd
+
 from django.views.decorators.csrf import csrf_exempt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 
-# Function to handle data reception from ESP32
+
+from django.http import JsonResponse
+import json
+import pandas as pd
+import joblib
+
+import json
+import pandas as pd
+import joblib
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import ESP32Data
+
+# Load model and label encoder once at module load time
+rf_classifier = joblib.load('random_forest_model.pkl')
+label_encoder = joblib.load('label_encoder.pkl')
+
 @csrf_exempt
 def receive_data(request):
-    if request.method == 'POST':
-        try:
-            # Parse the received JSON data
-            data = json.loads(request.body)
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body.decode('utf-8'))
 
-            # Check if required params are present
-            if 'ax' not in data or 'ay' not in data or 'az' not in data:
-                return JsonResponse({'error': 'Missing parameters'}, status=400)
+        # Validate and convert inputs
+        ax = float(data.get('ax', None))
+        ay = float(data.get('ay', None))
+        az = float(data.get('az', None))
 
-            param1 = data.get('ax')
-            param2 = data.get('ay')
-            param3 = data.get('az')
+        if ax is None or ay is None or az is None:
+            return JsonResponse({'error': 'Missing accelerometer data'}, status=400)
 
-            # Validate data types
-            try:
-                param1 = float(param1)
-                param2 = float(param2)
-                param3 = float(param3)
-            except ValueError:
-                return JsonResponse({'error': 'Invalid data format, must be numbers'}, status=400)
+        # Save data to DB
+        new_data = ESP32Data(param1=ax, param2=ay, param3=az, predicted=False)
+        new_data.save()
 
-            # Save the received data into the database
-            esp32_data = ESP32Data(
-                param1=param1, param2=param2, param3=param3
-            )
-            esp32_data.save()
+        # Prepare feature for prediction
+        feature_data = pd.DataFrame([[ax, ay, az]], columns=['accx', 'accy', 'accz'])
 
-            # Return a success message
-            return JsonResponse({'message': 'Data saved successfully.'}, status=201)
+        # Predict
+        y_pred = rf_classifier.predict(feature_data)
+        prediction = label_encoder.inverse_transform(y_pred)[0]
 
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON format'}, status=400)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+        # Define alert condition
+        alert = (prediction == 'bad')
+        print(f'Prediction: {prediction}, Alert: {alert}')
 
-    return JsonResponse({'message': 'Send data via POST method'}, status=200)
+        return JsonResponse({'prediction': prediction, 'alert': alert})
+
+    except (ValueError, TypeError) as e:
+        return JsonResponse({'error': f'Invalid input data: {str(e)}'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+
+
+
+
 
 
 # Function to handle predictions using the stored data and pre-trained model
@@ -59,7 +84,7 @@ def predict_view(request):
         param1 = single_data.param1
         param2 = single_data.param2
         param3 = single_data.param3
-
+     
         try:
             # Load the pre-trained RandomForest model and LabelEncoder
             try:
