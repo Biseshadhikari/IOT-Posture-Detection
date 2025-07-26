@@ -106,3 +106,18 @@ void loop() {
 
   delay(500);  // Wait before sending next reading
 }
+
+
+
+// [env:esp32c3]
+// platform = espressif32
+// board = esp32-c3-devkitm-1
+// framework = arduino
+// monitor_speed = 115200
+// upload_port = /dev/cu.usbmodem1101
+
+// lib_deps =
+//     adafruit/Adafruit MPU6050@^2.2.1
+//     adafruit/Adafruit Unified Sensor@^1.1.9
+//     bblanchon/ArduinoJson@^6.21.4
+
