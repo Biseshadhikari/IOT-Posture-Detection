@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Posture Analysis Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    h1, h2 {
+      text-align: center;
+    }
+    #description {
+      max-width: 700px;
+      margin: 0 auto 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #charts {
+      display: flex;
+      justify-content: center;
+      gap: 50px;
+      flex-wrap: wrap;
+    }
+    #scatter3d, #barchart {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.15);
+      width: 600px;
+      height: 450px;
+    }
+    #recommendations {
+      max-width: 700px;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    #recommendations p {
+      font-size: 1.1em;
+      margin-bottom: 15px;
+    }
+    ul {
+      max-width: 700px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 15px 25px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+    ul li {
+      margin-bottom: 12px;
+      font-size: 1.1em;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Posture Analysis Dashboard</h1>
+
+  <div id="description">
+    <p>
+      Your posture data collected from the device is grouped into three categories to help you understand your posture habits better.
+    </p>
+    <ul>
+      <li><strong>Good Posture:</strong> Your posture is well aligned and balanced. Keep it up!</li>
+      <li><strong>Slightly Off Posture:</strong> Your posture has small deviations that you should be aware of and try to improve.</li>
+      <li><strong>Poor Posture:</strong> Your posture is far from ideal and could cause discomfort or pain. Please adjust your sitting or standing position.</li>
+    </ul>
+    <p>
+      <strong>How to read the charts below:</strong>
+    </p>
+    <ul>
+      <li><strong>3D Scatter Plot:</strong> Each dot represents one posture measurement, placed in 3D space by how your body is tilted or moved (X, Y, Z acceleration). Colors show which posture category it belongs to.</li>
+      <li><strong>Centroids:</strong> The diamond markers show the average position of each posture group.</li>
+      <li><strong>Bar Chart:</strong> Shows how many times you have been in each posture category. This helps you see which posture you spend most time in.</li>
+    </ul>
+    <p>
+      By reviewing this, you can learn how often you maintain good posture and when you need to correct yourself to avoid discomfort.
+    </p>
+  </div>
+
+  <div id="charts">
+    <div id="scatter3d"></div>
+    <div id="barchart"></div>
+  </div>
+
+  <div id="recommendations">
+    <h2>Posture Recommendations</h2>
+    <!-- Recommendations will be inserted here -->
+  </div>
+
+  <script>
+    async function fetchClusterData() {
+      try {
+        const response = await fetch('/posture/clusters/');
+        if (!response.ok) {
+          throw new Error('Failed to load cluster data');
+        }
+        return await response.json();
+      } catch (error) {
+        alert('Error fetching cluster data: ' + error.message);
+        throw error;
+      }
+    }
+
+    function createScatter3D(points, clusters) {
+      const clusterColors = ['#28a745', '#ffc107', '#dc3545'];  // green, yellow, red
+      let traces = [];
+
+      clusters.forEach((cluster, i) => {
+        const clusterPoints = points.filter(p => p.cluster === cluster.cluster);
+        const centroid = cluster.centroid;
+
+        // Cluster points
+        traces.push({
+          x: clusterPoints.map(p => p.x),
+          y: clusterPoints.map(p => p.y),
+          z: clusterPoints.map(p => p.z),
+          mode: 'markers',
+          type: 'scatter3d',
+          name: `${cluster.name} Points`,
+          marker: { size: 4, color: clusterColors[i], opacity: 0.6 }
+        });
+
+        // Centroid marker
+        traces.push({
+          x: [centroid[0]],
+          y: [centroid[1]],
+          z: [centroid[2]],
+          mode: 'markers+text',
+          type: 'scatter3d',
+          name: `${cluster.name} Centroid`,
+          marker: { size: 10, color: clusterColors[i], symbol: 'diamond' },
+          text: ['Centroid'],
+          textposition: 'top center',
+          hoverinfo: 'text'
+        });
+      });
+
+      const layout = {
+        margin: { l: 0, r: 0, b: 0, t: 0 },
+        scene: {
+          xaxis: { title: 'Accel X (Tilt Side to Side)' },
+          yaxis: { title: 'Accel Y (Tilt Forward/Backward)' },
+          zaxis: { title: 'Accel Z (Up/Down Force)' }
+        },
+        legend: { x: 0, y: 1 }
+      };
+
+      Plotly.newPlot('scatter3d', traces, layout, {responsive: true});
+    }
+
+    function createBarChart(clusters) {
+      const clusterLabels = clusters.map(c => c.name);
+      const clusterCounts = clusters.map(c => c.count);
+      const colors = ['#28a745', '#ffc107', '#dc3545'];
+
+      const data = [{
+        x: clusterLabels,
+        y: clusterCounts,
+        type: 'bar',
+        marker: { color: colors },
+        text: clusterCounts.map(String),
+        textposition: 'auto',
+      }];
+
+      const layout = {
+        title: 'Posture Category Frequency',
+        yaxis: {
+          title: 'Number of Readings',
+          rangemode: 'tozero',
+          dtick: 10
+        }
+      };
+
+      Plotly.newPlot('barchart', data, layout, {responsive: true});
+    }
+
+    function showRecommendations(clusters) {
+      const container = document.getElementById('recommendations');
+      // Clear previous if any except title
+      container.querySelectorAll('p').forEach(p => p.remove());
+
+      clusters.forEach(c => {
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>${c.name}:</strong> ${c.recommendation}`;
+        container.appendChild(p);
+      });
+    }
+
+    fetchClusterData()
+      .then(data => {
+        createScatter3D(data.points, data.clusters);
+        createBarChart(data.clusters);
+        showRecommendations(data.clusters);
+      })
+      .catch(console.error);
+  </script>
+</body>
+</html>
