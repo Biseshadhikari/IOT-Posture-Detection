@@ -9,7 +9,6 @@ urlpatterns = [
     path('posture/clusters/view/', views.posture_clusters_view, name='posture_clusters_view'),
     path('live-chart/', views.live_chart_view, name='live_chart'),
     path('latest-data/', views.get_latest_data, name='latest_data'),
-
     path('get-latest-orientation/', views.get_latest_orientation, name='get_latest_orientation'),
 
 

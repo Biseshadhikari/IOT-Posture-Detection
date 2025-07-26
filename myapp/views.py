@@ -30,39 +30,39 @@ label_encoder = joblib.load('label_encoder.pkl')
 def receive_data(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
+
     try:
         data = json.loads(request.body.decode('utf-8'))
 
-        # Validate and convert inputs
-        ax = float(data.get('ax', None))
-        ay = float(data.get('ay', None))
-        az = float(data.get('az', None))
+        ax = float(data.get('ax'))
+        ay = float(data.get('ay'))
+        az = float(data.get('az'))
 
-        if ax is None or ay is None or az is None:
-            return JsonResponse({'error': 'Missing accelerometer data'}, status=400)
+        q_w = float(data.get('q_w'))
+        q_x = float(data.get('q_x'))
+        q_y = float(data.get('q_y'))
+        q_z = float(data.get('q_z'))
 
-        # Save data to DB
-        new_data = ESP32Data(param1=ax, param2=ay, param3=az, predicted=False)
+        new_data = ESP32Data(
+            param1=ax,
+            param2=ay,
+            param3=az,
+            q_w=q_w,
+            q_x=q_x,
+            q_y=q_y,
+            q_z=q_z,
+            predicted=False
+        )
         new_data.save()
 
-        # Prepare feature for prediction
-        feature_data = pd.DataFrame([[ax, ay, az]], columns=['accx', 'accy', 'accz'])
-
-        # Predict
-        y_pred = rf_classifier.predict(feature_data)
-        prediction = label_encoder.inverse_transform(y_pred)[0]
-
-        # Define alert condition
-        alert = (prediction == 'bad')
-        print(f'Prediction: {prediction}, Alert: {alert}')
+        # Dummy prediction example, replace with your model logic if any
+        prediction = 'good'
+        alert = False
 
         return JsonResponse({'prediction': prediction, 'alert': alert})
 
-    except (ValueError, TypeError) as e:
-        return JsonResponse({'error': f'Invalid input data: {str(e)}'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 
 
