@@ -274,36 +274,3 @@ def posture_clusters_view(request):
 
 
 
-def live_chart_view(request):
-    return render(request, 'live_chart.html')
-
-
-def get_latest_data(request):
-    try:
-        latest = ESP32Data.objects.latest('timestamp')
-        return JsonResponse({
-            "timestamp": latest.timestamp.strftime("%H:%M:%S"),
-            "param1": latest.param1,
-            "param2": latest.param2,
-            "param3": latest.param3,
-        })
-    except ESP32Data.DoesNotExist:
-        return JsonResponse({
-            "timestamp": "",
-            "param1": None,
-            "param2": None,
-            "param3": None,
-        })
-    
-
-def mpu_3d_view(request):
-    # Renders the template with 3D visualization
-    return render(request, '3d.html')
-
-def get_latest_orientation(request):
-    latest = ESP32Data.objects.order_by('-timestamp').first()
-    return JsonResponse({
-        'param1': latest.param1 if latest else 0,
-        'param2': latest.param2 if latest else 0,
-        'param3': latest.param3 if latest else 0,
-    })

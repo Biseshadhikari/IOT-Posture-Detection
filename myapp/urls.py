@@ -7,11 +7,6 @@ urlpatterns = [
     path('generate-synthetic-data/', views.generate_synthetic_data, name='generate-synthetic-data'),
         path('posture/clusters/', views.posture_clusters, name='posture_clusters'),
             path('posture/clusters/view/', views.posture_clusters_view, name='posture_clusters_view'),
-            path('live-chart/', views.live_chart_view, name='live_chart'),
-    path('latest-data/', views.get_latest_data, name='latest_data'),
-        path('mpu-3d/', views.mpu_3d_view, name='mpu_3d_view'),
-
-    path('get-latest-orientation/', views.get_latest_orientation, name='get_latest_orientation'),
 
 
 
