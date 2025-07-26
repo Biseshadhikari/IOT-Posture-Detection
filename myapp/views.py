@@ -20,12 +20,16 @@ import pandas as pd
 import joblib
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import ESP32Data
+from .models import *
 
 # Load model and label encoder once at module load time
 rf_classifier = joblib.load('random_forest_model.pkl')
 label_encoder = joblib.load('label_encoder.pkl')
 
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import ESP32Data, SensorReading
 @csrf_exempt
 def receive_data(request):
     if request.method != 'POST':
@@ -34,6 +38,7 @@ def receive_data(request):
     try:
         data = json.loads(request.body.decode('utf-8'))
 
+        # MPU6050 / posture data
         ax = float(data.get('ax'))
         ay = float(data.get('ay'))
         az = float(data.get('az'))
@@ -43,7 +48,20 @@ def receive_data(request):
         q_y = float(data.get('q_y'))
         q_z = float(data.get('q_z'))
 
-        new_data = ESP32Data(
+        # Device ID (optional, not used in GPSReading model)
+        device_id = data.get('device_id', 'unknown-device')
+
+        # Temperature & Humidity (optional)
+        temp = data.get('temperature')
+        hum = data.get('humidity')
+
+        # GPS data
+        latitude = data.get('gps_lat')
+        longitude = data.get('gps_lng')
+        gps_time = data.get('gps_time', '')  # Could be a string timestamp, default empty
+
+        # Save posture data
+        new_posture = ESP32Data(
             param1=ax,
             param2=ay,
             param3=az,
@@ -53,9 +71,36 @@ def receive_data(request):
             q_z=q_z,
             predicted=False
         )
-        new_data.save()
+        new_posture.save()
 
-        # Dummy prediction example, replace with your model logic if any
+        # Save temperature and humidity
+        if temp is not None and hum is not None:
+            try:
+                temp_val = float(temp)
+                hum_val = float(hum)
+                SensorReading.objects.create(
+                    device_id=device_id,
+                    temperature=temp_val,
+                    humidity=hum_val
+                )
+            except ValueError:
+                pass
+
+        # Save GPS data if latitude and longitude are present
+        if latitude is not None and longitude is not None:
+            try:
+                lat_val = float(latitude)
+                lon_val = float(longitude)
+                gps_time_val = str(gps_time) if gps_time else ""
+
+                GPSReading.objects.create(
+                    latitude=lat_val,
+                    longitude=lon_val,
+                    gps_time=gps_time_val
+                )
+            except ValueError:
+                pass  # Ignore bad data
+
         prediction = 'good'
         alert = False
 
@@ -65,6 +110,33 @@ def receive_data(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
+
+
+def latest_gps_data(request):
+    latest = GPSReading.objects.order_by('-created_at').first()
+    if latest:
+        data = {
+            'latitude': latest.latitude,
+            'longitude': latest.longitude,
+            'timestamp': latest.created_at.isoformat(),
+        }
+    else:
+        data = {
+            'latitude': 27.681,  # default lat
+            'longitude': 85.32,  # default lng
+            'timestamp': None,
+        }
+    return JsonResponse(data)
+
+def gps_map_view(request):
+  
+    lat, lng = 27.681, 85.32  # Default location (Biratnagar, Nepal)
+
+    context = {
+        'lat': lat,
+        'lng': lng
+    }
+    return render(request, 'gps_map.html', context)
 
 
 
@@ -277,15 +349,26 @@ def posture_clusters_view(request):
 def live_chart_view(request):
     return render(request, 'live_chart.html')
 
+from django.http import JsonResponse
+from math import sqrt
+from .models import ESP32Data
 
 def get_latest_data(request):
     try:
         latest = ESP32Data.objects.latest('timestamp')
+
+        ax = latest.param1
+        ay = latest.param2
+        az = latest.param3
+
+        total_acceleration = sqrt(ax**2 + ay**2 + az**2)
+
         return JsonResponse({
             "timestamp": latest.timestamp.strftime("%H:%M:%S"),
-            "param1": latest.param1,
-            "param2": latest.param2,
-            "param3": latest.param3,
+            "param1": ax,
+            "param2": ay,
+            "param3": az,
+            "acceleration": round(total_acceleration, 3),
         })
     except ESP32Data.DoesNotExist:
         return JsonResponse({
@@ -293,17 +376,77 @@ def get_latest_data(request):
             "param1": None,
             "param2": None,
             "param3": None,
+            "acceleration": None,
         })
+
     
 
 def mpu_3d_view(request):
     # Renders the template with 3D visualization
     return render(request, '3d.html')
 
-def get_latest_orientation(request):
+def latest_quaternion(request):
+    # Get latest data point
     latest = ESP32Data.objects.order_by('-timestamp').first()
-    return JsonResponse({
-        'param1': latest.param1 if latest else 0,
-        'param2': latest.param2 if latest else 0,
-        'param3': latest.param3 if latest else 0,
-    })
+    if not latest:
+        return JsonResponse({'error': 'No data'}, status=404)
+
+    data = {
+        'q_w': latest.q_w,
+        'q_x': latest.q_x,
+        'q_y': latest.q_y,
+        'q_z': latest.q_z,
+        'timestamp': latest.timestamp.isoformat()
+    }
+    return JsonResponse(data)
+
+
+
+
+def both(request):
+    return render(request,'both.html')
+
+import json
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
+from .models import SensorReading
+
+@csrf_exempt
+def temp_humidity_receiver(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            device_id = data.get("device_id")
+            temperature = float(data.get("temperature"))
+            humidity = float(data.get("humidity"))
+
+            if not device_id:
+                return HttpResponseBadRequest("Missing device_id")
+
+            SensorReading.objects.create(
+                device_id=device_id,
+                temperature=temperature,
+                humidity=humidity
+            )
+            return JsonResponse({"message": "Data saved successfully"})
+        except Exception as e:
+            return HttpResponseBadRequest(f"Invalid data: {e}")
+
+    return HttpResponseBadRequest("Only POST allowed")
+
+def dht_data(request):
+    readings = SensorReading.objects.order_by('-timestamp')[:20]
+    data = []
+    for r in readings:
+        data.append({
+            "device_id": r.device_id,
+            "temperature": r.temperature,
+            "humidity": r.humidity,
+            "timestamp": r.timestamp.isoformat()
+        })
+    return JsonResponse(data, safe=False)
+
+
+
+def temperature_humidity_view(request):
+    return render(request, 'temp.html')

@@ -1,76 +1,76 @@
+<!-- templates/rotation.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>MPU 3D Orientation Visualizer</title>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  <title>Real-time 3D Rotation</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #121212; }
-    #container { width: 100vw; height: 100vh; }
+    body { margin: 0; overflow: hidden; background-color: #121212; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <div id="container"></div>
-
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
-    const container = document.getElementById('container');
-
-    // Scene setup
+    // Setup Three.js scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x121212);
-
-    // Camera setup
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     camera.position.z = 3;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(window.innerWidth, window.innerHeight);
-    container.appendChild(renderer.domElement);
+    document.body.appendChild(renderer.domElement);
 
-    // Geometry & Material
+    // Add ambient and directional lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 7);
+    scene.add(directionalLight);
+
+    // Create a cube to represent your object
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshNormalMaterial({ wireframe: false });
+    const material = new THREE.MeshStandardMaterial({ color: 0x2194ce, roughness: 0.4, metalness: 0.7 });
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
 
-    // Resize handler
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    // Helper axes
+    const axesHelper = new THREE.AxesHelper(2);
+    scene.add(axesHelper);
+
+    // Function to fetch latest quaternion data from backend
+    async function fetchQuaternion() {
+      try {
+        const res = await fetch('/latest-quaternion/');
+        if (!res.ok) throw new Error('Network response was not ok');
+        const data = await res.json();
+
+        if (data.q_w !== null) {
+          // Three.js Quaternion order is (x, y, z, w)
+          cube.quaternion.set(data.q_x, data.q_y, data.q_z, data.q_w);
+        }
+      } catch (err) {
+        console.error('Failed to fetch quaternion:', err);
+      }
+    }
 
     // Animation loop
     function animate() {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
     }
+
     animate();
 
-    // Fetch latest MPU orientation every 500ms and update cube rotation
-    async function fetchOrientation() {
-      try {
-        const response = await fetch("{% url 'get_latest_orientation' %}");
-        const data = await response.json();
+    // Poll quaternion data every 500 ms
+    setInterval(fetchQuaternion, 500);
 
-        // Assuming param1 = pitch, param2 = roll, param3 = yaw in degrees
-        // Convert degrees to radians for three.js rotation
-        cube.rotation.x = (data.param2 || 0) * (Math.PI / 180); // roll
-        cube.rotation.y = (data.param1 || 0) * (Math.PI / 180); // pitch
-        cube.rotation.z = (data.param3 || 0) * (Math.PI / 180); // yaw
-
-      } catch (error) {
-        console.error('Failed to fetch MPU orientation:', error);
-      }
-    }
-
-    setInterval(fetchOrientation, 500);
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>

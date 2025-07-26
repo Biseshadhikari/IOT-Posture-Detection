@@ -29,3 +29,21 @@ class AgentTunnel(models.Model):
 
     def __str__(self):
         return f"{self.user_id} -> {self.tunnel_url}"
+    
+
+
+class SensorReading(models.Model):
+    device_id = models.CharField(max_length=100)  # ESP device identifier
+    temperature = models.FloatField()
+    humidity = models.FloatField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.device_id} - {self.timestamp}"
+    
+
+class GPSReading(models.Model):
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    gps_time = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)

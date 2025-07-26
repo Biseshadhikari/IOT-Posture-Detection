@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>piSat 1.0 Ground Station Dashboard</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+:root {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f2f5;
+  --bg-card: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a5568;
+  --accent-primary: #3182ce;
+  --accent-secondary: #805ad5;
+  --accent-gradient: linear-gradient(135deg, #3182ce, #805ad5);
+  --success-color: #38a169;
+  --warning-color: #dd6b20;
+  --error-color: #e53e3e;
+  --border-color: #e2e8f0;
+  --shadow-light: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  --shadow-heavy: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  --glow-blue: 0 0 20px rgba(49, 130, 206, 0.1);
+  --glow-purple: 0 0 20px rgba(128, 90, 213, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+  position: relative;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 4px;
+  background: var(--accent-gradient);
+  border-radius: 2px;
+  box-shadow: var(--glow-blue);
+}
+
+h2 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0;
+  font-weight: 700;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  font-weight: 400;
+}
+
+/* Grid Layout */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: repeat(2, 420px);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1400px;
+  margin-bottom: 3rem;
+}
+
+.grid-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-light);
+}
+
+.grid-item:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-heavy);
+  border-color: var(--accent-primary);
+}
+
+/* 3D View */
+.three-view {
+  grid-column: span 6;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ESP Chart */
+.esp-chart {
+  grid-column: span 6;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Map Container */
+.map-container {
+  grid-column: span 7;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Temperature/Humidity */
+.temp-hum-container {
+  grid-column: span 5;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Card Headers */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card-icon {
+  width: 24px;
+  height: 24px;
+  background: var(--accent-gradient);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 14px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success-color);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Canvas Containers */
+.canvas-container {
+  flex: 1;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+}
+
+canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Map Styles */
+#gps-map {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+#gps-info {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  z-index: 1000;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-medium);
+  font-weight: 500;
+}
+
+/* Value Displays */
+.value-display {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+
+.value-box {
+  flex: 1;
+  padding: 1rem;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid var(--border-color);
+}
+
+.value-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.value-number {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.value-unit {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-left: 0.25rem;
+}
+
+/* Chart Data Tables */
+.chart-data-table {
+  width: 100%;
+  margin-top: 1rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.chart-data-table th, .chart-data-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.chart-data-table th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.chart-data-table td {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Action Buttons */
+.actions {
+  width: 100%;
+  max-width: 1400px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.action-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-light);
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+  border-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+.btn-icon {
+  font-size: 18px;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .three-view, .esp-chart {
+    grid-column: span 6;
+  }
+  
+  .map-container {
+    grid-column: span 6;
+  }
+  
+  .temp-hum-container {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 1rem;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 350px);
+    gap: 1rem;
+  }
+  
+  .three-view, .esp-chart, .map-container, .temp-hum-container {
+    grid-column: span 1;
+  }
+  
+  .actions {
+    grid-template-columns: 1fr;
+  }
+  
+  h2 {
+    font-size: 2rem;
+  }
+}
+
+/* Chart Customizations */
+.chart-container {
+  position: relative;
+  height: 70%;
+  flex: 1;
+}
+
+.chart-data-container {
+  height: 30%;
+  margin-top: 1rem;
+}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>piSat 1.0 Ground Station Dashboard</h2>
+    <div class="subtitle">Real-time satellite monitoring and control</div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="grid-item three-view">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-icon">🛰️</div>
+          3D Orientation
+        </div>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          Live
+        </div>
+      </div>
+      <div class="canvas-container">
+        <canvas id="three-canvas"></canvas>
+      </div>
+      <div class="value-display">
+        <div class="value-box">
+          <div class="value-label">X Rotation</div>
+          <div class="value-number" id="x-rotation">0.00<span class="value-unit">°</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Y Rotation</div>
+          <div class="value-number" id="y-rotation">0.00<span class="value-unit">°</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Z Rotation</div>
+          <div class="value-number" id="z-rotation">0.00<span class="value-unit">°</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-item esp-chart">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-icon">📊</div>
+          System Parameters
+        </div>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          Active
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="espChart"></canvas>
+      </div>
+      <div class="chart-data-container">
+      
+          <div class="value">Total Acceleration: <span id="accel">--</span> g</div>
+          <br>
+          <br>
+              <div>AX: <span id="ax">--</span></div>
+              
+          <div>AY: <span id="ay">--</span></div>
+          <div>AZ: <span id="az">--</span></div>
+      </div>
+    </div>
+
+    <div class="grid-item map-container">
+      <div id="gps-info">Loading latest GPS data...</div>
+      <div id="gps-map"></div>
+      <div class="value-display" style="position: absolute; bottom: 20px; left: 20px; right: 20px;">
+        <div class="value-box">
+          <div class="value-label">Latitude</div>
+          <div class="value-number" id="latitude-value">0.00000<span class="value-unit">°</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Longitude</div>
+          <div class="value-number" id="longitude-value">0.00000<span class="value-unit">°</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Altitude</div>
+          <div class="value-number" id="altitude-value">0<span class="value-unit">m</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-item temp-hum-container">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="card-icon">🌡️</div>
+          Environmental
+        </div>
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          Monitoring
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="dhtChart"></canvas>
+      </div>
+      <div class="value-display">
+        <div class="value-box">
+          <div class="value-label">Temperature</div>
+          <div class="value-number" id="temperature-value">--<span class="value-unit">°C</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Humidity</div>
+          <div class="value-number" id="humidity-value">--<span class="value-unit">%</span></div>
+        </div>
+        <div class="value-box">
+          <div class="value-label">Pressure</div>
+          <div class="value-number" id="pressure-value">--<span class="value-unit">hPa</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="action-btn" onclick="location.href='/3d'">
+      <span class="btn-icon">🔍</span>
+      Expand 3D View
+    </button>
+    <button class="action-btn" onclick="location.href='/live-chart'">
+      <span class="btn-icon">📈</span>
+      Expand Chart View
+    </button>
+    <button class="action-btn" onclick="location.href='/sensors'">
+      <span class="btn-icon">🌡️</span>
+      Expand Temperature View
+    </button>
+    <button class="action-btn" onclick="location.href='/map'">
+      <span class="btn-icon">🗺️</span>
+      Expand Map View
+    </button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('gps-map').setView([27.681, 85.32], 13);
+    let marker;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '©️ OpenStreetMap',
+    }).addTo(map);
+
+    const gpsInfo = document.getElementById('gps-info');
+
+    async function fetchLatestGPS() {
+      try {
+        const response = await fetch('{% url "latest_gps_data" %}');
+        if (!response.ok) throw new Error('Network error');
+        const data = await response.json();
+
+        gpsInfo.textContent = `Updated: ${data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : 'N/A'}`;
+        document.getElementById('latitude-value').textContent = `${data.latitude.toFixed(5)}°`;
+        document.getElementById('longitude-value').textContent = `${data.longitude.toFixed(5)}°`;
+        document.getElementById('altitude-value').textContent = `${data.altitude ? data.altitude.toFixed(0) : '0'}m`;
+        
+        const latlng = [data.latitude, data.longitude];
+        if (!marker) {
+          marker = L.marker(latlng).addTo(map);
+        } else {
+          marker.setLatLng(latlng);
+        }
+        map.setView(latlng, 19);
+      } catch (error) {
+        gpsInfo.textContent = 'Error fetching GPS data';
+      }
+    }
+
+    const gpsInterval = setInterval(fetchLatestGPS, 200);
+    fetchLatestGPS();
+  </script>
+
+  <script>
+    const ctxDHT = document.getElementById('dhtChart').getContext('2d');
+    const dhtChart = new Chart(ctxDHT, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Temperature (°C)',
+            data: [],
+            borderColor: '#3182ce',
+            backgroundColor: 'rgba(49, 130, 206, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'Humidity (%)',
+            data: [],
+            borderColor: '#805ad5',
+            backgroundColor: 'rgba(128, 90, 213, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            labels: { 
+              color: '#1a1a1a',
+              font: { family: 'Inter', size: 12 },
+              usePointStyle: true,
+              padding: 20
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            titleColor: '#3182ce',
+            bodyColor: '#1a1a1a',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            cornerRadius: 12,
+            displayColors: true
+          },
+        },
+        scales: {
+          x: { 
+            ticks: { 
+              color: '#4a5568',
+              font: { family: 'JetBrains Mono', size: 10 }
+            },
+            grid: { color: '#e2e8f0' }
+          },
+          y: { 
+            ticks: { 
+              color: '#4a5568',
+              font: { family: 'JetBrains Mono', size: 10 }
+            }, 
+            beginAtZero: true,
+            grid: { color: '#e2e8f0' }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        }
+      }
+    });
+
+    async function fetchDHTData() {
+      try {
+        const response = await fetch('/dht-data/');
+        const dataArray = await response.json();
+        if (!dataArray.length) return;
+
+        const timestamps = dataArray.map(d => new Date(d.timestamp).toLocaleTimeString());
+        const temps = dataArray.map(d => d.temperature);
+        const hums = dataArray.map(d => d.humidity);
+
+        dhtChart.data.labels = timestamps;
+        dhtChart.data.datasets[0].data = temps;
+        dhtChart.data.datasets[1].data = hums;
+        dhtChart.update('none');
+
+        document.getElementById('temperature-value').textContent = `${temps.at(-1).toFixed(1)}°C`;
+        document.getElementById('humidity-value').textContent = `${hums.at(-1).toFixed(1)}%`;
+      } catch (err) {
+        console.error('Failed to fetch DHT data', err);
+      }
+    }
+
+    const dhtInterval = setInterval(fetchDHTData, 200);
+    fetchDHTData();
+  </script>
+
+  <script>
+    const ctxESP = document.getElementById('espChart').getContext('2d');
+    const espChart = new Chart(ctxESP, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'ax',
+            data: [],
+            borderColor: '#3182ce',
+            backgroundColor: 'rgba(49, 130, 206, 0.1)',
+            tension: 0.3,
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'ay',
+            data: [],
+            borderColor: '#805ad5',
+            backgroundColor: 'rgba(128, 90, 213, 0.1)',
+            tension: 0.3,
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'az',
+            data: [],
+            borderColor: '#38a169',
+            backgroundColor: 'rgba(56, 161, 105, 0.1)',
+            tension: 0.3,
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 6
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            labels: { 
+              color: '#1a1a1a',
+              font: { family: 'Inter', size: 12 },
+              usePointStyle: true,
+              padding: 20
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            titleColor: '#3182ce',
+            bodyColor: '#1a1a1a',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            cornerRadius: 12
+          }
+        },
+        scales: {
+          x: { 
+            ticks: { 
+              color: '#4a5568',
+              font: { family: 'JetBrains Mono', size: 10 }
+            },
+            grid: { color: '#e2e8f0' }
+          },
+          y: { 
+            ticks: { 
+              color: '#4a5568',
+              font: { family: 'JetBrains Mono', size: 10 }
+            },
+            grid: { color: '#e2e8f0' }
+          }
+        },
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        }
+      }
+    });
+
+    // Store data for calculations
+    const espData = {
+      param1: [],
+      param2: [],
+      param3: []
+    };
+
+    function updateDataTable() {
+      // Current values
+      document.getElementById('param1-current').textContent = espData.param1.length ? espData.param1[espData.param1.length - 1].toFixed(2) : '--';
+      document.getElementById('param2-current').textContent = espData.param2.length ? espData.param2[espData.param2.length - 1].toFixed(2) : '--';
+      document.getElementById('param3-current').textContent = espData.param3.length ? espData.param3[espData.param3.length - 1].toFixed(2) : '--';
+      
+      // Min values
+      document.getElementById('param1-min').textContent = espData.param1.length ? Math.min(...espData.param1).toFixed(2) : '--';
+      document.getElementById('param2-min').textContent = espData.param2.length ? Math.min(...espData.param2).toFixed(2) : '--';
+      document.getElementById('param3-min').textContent = espData.param3.length ? Math.min(...espData.param3).toFixed(2) : '--';
+      
+      // Max values
+      document.getElementById('param1-max').textContent = espData.param1.length ? Math.max(...espData.param1).toFixed(2) : '--';
+      document.getElementById('param2-max').textContent = espData.param2.length ? Math.max(...espData.param2).toFixed(2) : '--';
+      document.getElementById('param3-max').textContent = espData.param3.length ? Math.max(...espData.param3).toFixed(2) : '--';
+      
+      // Avg values
+      document.getElementById('param1-avg').textContent = espData.param1.length ? 
+        (espData.param1.reduce((a, b) => a + b, 0)) / espData.param1.length.toFixed(2) : '--';
+      document.getElementById('param2-avg').textContent = espData.param2.length ? 
+        (espData.param2.reduce((a, b) => a + b, 0) / espData.param2.length).toFixed(2) : '--';
+      document.getElementById('param3-avg').textContent = espData.param3.length ? 
+        (espData.param3.reduce((a, b) => a + b, 0) / espData.param3.length).toFixed(2) : '--';
+    }
+
+    function fetchESPData() {
+      $.get("{% url 'latest_data' %}", data => {
+        if (data.timestamp) {
+   
+          document.getElementById('accel').textContent = data.acceleration.toFixed(3);
+          const timestamp = new Date(data.timestamp).toLocaleTimeString();
+          
+          espChart.data.labels.push(data.timestamp);
+          espChart.data.datasets[0].data.push(data.param1);
+          espChart.data.datasets[1].data.push(data.param2);
+          espChart.data.datasets[2].data.push(data.param3);
+          
+          // Store data
+          espData.param1.push(data.param1);
+          espData.param2.push(data.param2);
+          espData.param3.push(data.param3);
+
+          if (espChart.data.labels.length > 20) {
+            espChart.data.labels.shift();
+            espChart.data.datasets.forEach(ds => ds.data.shift());
+            
+            // Remove oldest data points
+            espData.param1.shift();
+            espData.param2.shift();
+            espData.param3.shift();
+          }
+
+          espChart.update('none');
+          updateDataTable();
+        }
+      }).fail(err => console.error("ESP fetch failed", err));
+    }
+
+    const espInterval = setInterval(fetchESPData, 200);
+    fetchESPData();
+  </script>
+
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    camera.position.z = 3;
+
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      canvas: document.getElementById('three-canvas'),
+      alpha: true
+    });
+    renderer.setClearColor(0xf5f7fa, 1);
+
+    function resizeRenderer() {
+      const container = document.querySelector('.three-view .canvas-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener('resize', resizeRenderer);
+    resizeRenderer();
+
+    // Add ambient light
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    
+    // Add directional lights
+    const light1 = new THREE.DirectionalLight(0x3182ce, 0.8);
+    light1.position.set(5, 10, 7);
+    scene.add(light1);
+
+    const light2 = new THREE.DirectionalLight(0x805ad5, 0.4);
+    light2.position.set(-5, -10, -7);
+    scene.add(light2);
+
+    // Create satellite model
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ 
+        color: 0x3182ce, 
+        roughness: 0.2, 
+        metalness: 0.7,
+        emissive: 0x001122,
+        emissiveIntensity: 0.1
+      })
+    );
+    scene.add(cube);
+    
+    // Add solar panels
+    const solarPanelGeometry = new THREE.BoxGeometry(1.5, 0.05, 0.8);
+    const solarPanelMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x2d3748, 
+      metalness: 0.9, 
+      roughness: 0.1 
+    });
+    
+    const solarPanel1 = new THREE.Mesh(solarPanelGeometry, solarPanelMaterial);
+    solarPanel1.position.set(0, 0, -0.9);
+    cube.add(solarPanel1);
+    
+    const solarPanel2 = new THREE.Mesh(solarPanelGeometry, solarPanelMaterial);
+    solarPanel2.position.set(0, 0, 0.9);
+    cube.add(solarPanel2);
+
+    // Add axis helper
+    const axesHelper = new THREE.AxesHelper(2);
+    axesHelper.material.transparent = true;
+    axesHelper.material.opacity = 0.5;
+    scene.add(axesHelper);
+
+    async function fetchQuaternion() {
+      try {
+        const res = await fetch("/latest-quaternion/");
+        const data = await res.json();
+        if (data.q_w !== null) {
+          cube.quaternion.set(data.q_x, data.q_y, data.q_z, data.q_w);
+          
+          // Convert quaternion to Euler angles for display
+          const euler = new THREE.Euler().setFromQuaternion(cube.quaternion);
+          document.getElementById('x-rotation').textContent = `${(euler.x * (180/Math.PI)).toFixed(2)}°`;
+          document.getElementById('y-rotation').textContent = `${(euler.y * (180/Math.PI)).toFixed(2)}°`;
+          document.getElementById('z-rotation').textContent = `${(euler.z * (180/Math.PI)).toFixed(2)}°`;
+        }
+      } catch (err) {
+        console.error("Quaternion error:", err);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    animate();
+    const quatInterval = setInterval(fetchQuaternion, 200);
+
+    window.addEventListener('beforeunload', () => {
+      clearInterval(gpsInterval);
+      clearInterval(dhtInterval);
+      clearInterval(espInterval);
+      clearInterval(quatInterval);
+    });
+  </script>
+</body>
+</html>

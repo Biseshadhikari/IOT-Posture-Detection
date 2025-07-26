@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DHT11 Real-Time Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #f1f5f9;
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+    }
+    canvas {
+      background-color: #1e293b;
+      border-radius: 12px;
+    }
+    h2 {
+      text-align: center;
+      color: #e2e8f0;
+      margin-bottom: 1rem;
+    }
+    .values {
+      text-align: center;
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+    }
+    .value-box {
+      background-color: #1e293b;
+      padding: 1rem 2rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+    }
+    .value-box span {
+      font-size: 1.5rem;
+      font-weight: bold;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h2>🌡️ Real-Time Temperature & Humidity (DHT11)</h2>
+
+  <div class="values">
+    <div class="value-box">
+      Temperature<br><span id="tempValue">-- °C</span>
+    </div>
+    <div class="value-box">
+      Humidity<br><span id="humValue">-- %</span>
+    </div>
+  </div>
+
+  <canvas id="dhtChart" width="1000" height="400"></canvas>
+
+  <script>
+    const ctx = document.getElementById('dhtChart').getContext('2d');
+    const dhtChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Temperature (°C)',
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            data: [],
+            fill: true,
+            tension: 0.4
+          },
+          {
+            label: 'Humidity (%)',
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            data: [],
+            fill: true,
+            tension: 0.4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        plugins: {
+          legend: {
+            labels: { color: '#f1f5f9' }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#cbd5e1' }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#cbd5e1' }
+          }
+        }
+      }
+    });
+
+    async function fetchData() {
+      const response = await fetch('/dht-data/');
+      const dataArray = await response.json();
+
+      const timestamps = dataArray.map(item => {
+        const t = new Date(item.timestamp);
+        return t.toLocaleTimeString();
+      });
+      const temperatures = dataArray.map(item => item.temperature);
+      const humidities = dataArray.map(item => item.humidity);
+
+      dhtChart.data.labels = timestamps;
+      dhtChart.data.datasets[0].data = temperatures;
+      dhtChart.data.datasets[1].data = humidities;
+      dhtChart.update();
+
+      // Update digital values (latest value)
+      const latestTemp = temperatures[temperatures.length - 1];
+      const latestHum = humidities[humidities.length - 1];
+
+      document.getElementById('tempValue').textContent = latestTemp + " °C";
+      document.getElementById('humValue').textContent = latestHum + " %";
+    }
+
+    fetchData();
+    setInterval(fetchData, 200);
+  </script>
+</body>
+</html>
