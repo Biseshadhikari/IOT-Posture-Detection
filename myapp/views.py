@@ -4,6 +4,7 @@ from django.shortcuts import render
 from .models import ESP32Data
 import joblib
 import pandas as pd
+from django.contrib.auth.decorators import login_required
 
 from django.views.decorators.csrf import csrf_exempt
 from sklearn.ensemble import RandomForestClassifier
@@ -16,54 +17,145 @@ import pandas as pd
 import joblib
 
 import json
-import pandas as pd
-import joblib
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import ESP32Data
+from django.contrib.sessions.models import Session
+from django.utils import timezone
+from .models import ESP32Data, UserToken, ESPDevice
+import pandas as pd
+import joblib
 
-# Load model and label encoder once at module load time
+# Web login view
+def web_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)  # Django session login
+
+            # Generate or update token for ESP
+            token = UserToken.generate_token(user)
+
+            return redirect('/')  # Redirect to your dashboard or homepage
+        else:
+            return render(request, 'login.html', {'error': 'Invalid credentials'})
+    return render(request, 'login.html')
+
+
+# Web logout view
+
+def web_logout(request):
+    user = request.user
+    # Delete the token when user logs out
+    UserToken.objects.filter(user=user).delete()
+    logout(request)  # Django logout
+    return redirect('login')
+
+
+# Load model and label encoder
 rf_classifier = joblib.load('random_forest_model.pkl')
 label_encoder = joblib.load('label_encoder.pkl')
 
+
+# ---------------------------
+# ESP Polling for token
+# ---------------------------
+@csrf_exempt
+def esp_poll(request):
+    device_id = request.GET.get('device_id')
+    if not device_id:
+        return JsonResponse({'status': 'error', 'message': 'No device_id provided'}, status=400)
+
+    # Create device if it does not exist
+    device, created = ESPDevice.objects.get_or_create(device_id=device_id)
+
+    # Check if any user has an active session (logged in)
+    sessions = Session.objects.filter(expire_date__gte=timezone.now())
+    logged_in_user = None
+    for session in sessions:
+        data = session.get_decoded()
+        user_id = data.get('_auth_user_id')
+        if user_id:
+            from django.contrib.auth.models import User
+            try:
+                user = User.objects.get(id=user_id)
+                logged_in_user = user
+                break
+            except User.DoesNotExist:
+                continue
+
+    if logged_in_user:
+        # Assign device to logged-in user
+        device.user = logged_in_user
+        device.save()
+
+        # Generate token
+        token = UserToken.generate_token(logged_in_user)
+        return JsonResponse({'status': 'logged_in', 'token': token})
+    else:
+        # User logged out — remove device assignment & token
+        if device.user:
+            UserToken.objects.filter(user=device.user).delete()
+            device.user = None
+            device.save()
+        return JsonResponse({'status': 'logged_out', 'token': ''})
+
+
+# ---------------------------
+# Receive ESP data
+# ---------------------------
 @csrf_exempt
 def receive_data(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
+
+    # Check token
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    if not token:
+        return JsonResponse({'error': 'No token provided'}, status=401)
+
     try:
-        data = json.loads(request.body.decode('utf-8'))
+        token_obj = UserToken.objects.get(token=token)
+        user = token_obj.user
+    except UserToken.DoesNotExist:
+        return JsonResponse({'error': 'Invalid token'}, status=401)
 
-        # Validate and convert inputs
-        ax = float(data.get('ax', None))
-        ay = float(data.get('ay', None))
-        az = float(data.get('az', None))
+    # Check device
+    device_id = request.headers.get('Device-ID')
+    try:
+        device = ESPDevice.objects.get(device_id=device_id)
+        if device.user != user:
+            return JsonResponse({'error': 'Device not assigned to user'}, status=403)
+    except ESPDevice.DoesNotExist:
+        return JsonResponse({'error': 'Device not registered'}, status=403)
 
-        if ax is None or ay is None or az is None:
-            return JsonResponse({'error': 'Missing accelerometer data'}, status=400)
+    # Process sensor data
+    data = json.loads(request.body.decode('utf-8'))
+    ax = float(data.get('ax', None))
+    ay = float(data.get('ay', None))
+    az = float(data.get('az', None))
 
-        # Save data to DB
-        new_data = ESP32Data(param1=ax, param2=ay, param3=az, predicted=False)
-        new_data.save()
+    if ax is None or ay is None or az is None:
+        return JsonResponse({'error': 'Missing accelerometer data'}, status=400)
 
-        # Prepare feature for prediction
-        feature_data = pd.DataFrame([[ax, ay, az]], columns=['accx', 'accy', 'accz'])
+    # Save with user
+    new_data = ESP32Data(
+        user=user,               # assign the user
+        param1=ax,
+        param2=ay,
+        param3=az,
+        predicted=False
+    )
+    new_data.save()
 
-        # Predict
-        y_pred = rf_classifier.predict(feature_data)
-        prediction = label_encoder.inverse_transform(y_pred)[0]
+    # Prediction
+    feature_data = pd.DataFrame([[ax, ay, az]], columns=['accx','accy','accz'])
+    y_pred = rf_classifier.predict(feature_data)
+    prediction = label_encoder.inverse_transform(y_pred)[0]
+    alert = (prediction == 'bad')
 
-        # Define alert condition
-        alert = (prediction == 'bad')
-        print(f'Prediction: {prediction}, Alert: {alert}')
-
-        return JsonResponse({'prediction': prediction, 'alert': alert})
-
-    except (ValueError, TypeError) as e:
-        return JsonResponse({'error': f'Invalid input data: {str(e)}'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
+    return JsonResponse({'prediction': prediction, 'alert': alert})
 
 
 
@@ -74,9 +166,10 @@ def receive_data(request):
 
 
 # Function to handle predictions using the stored data and pre-trained model
+@login_required
 def predict_view(request):
     # Retrieve the latest non-predicted data from the database
-    latest_data = ESP32Data.objects.filter(predicted=False).order_by('-timestamp')
+    latest_data = ESP32Data.objects.filter(predicted=False,user = request.user).order_by('-timestamp')
 
     if latest_data.exists():
         # Get the latest sensor data received
@@ -307,3 +400,12 @@ def get_latest_orientation(request):
         'param2': latest.param2 if latest else 0,
         'param3': latest.param3 if latest else 0,
     })
+
+
+
+
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login, logout
+from django.http import JsonResponse
+from .models import UserToken, ESPDevice
+import uuid

@@ -5,6 +5,6 @@ from .models import *
 admin.site.register(ESP32Data)
 
 
-from .models import AgentTunnel
 
-admin.site.register(AgentTunnel)
+admin.site.register(UserToken)
+admin.site.register(ESPDevice)
