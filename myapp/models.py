@@ -33,9 +33,15 @@ class UserToken(models.Model):
 
     @staticmethod
     def generate_token(user):
-        token = str(uuid.uuid4())
-        UserToken.objects.update_or_create(user=user, defaults={"token": token})
-        return token
+        """
+        Returns the existing token if present, otherwise generates a new one.
+        The token never changes once created.
+        """
+        obj, created = UserToken.objects.get_or_create(
+            user=user,
+            defaults={'token': str(uuid.uuid4())}
+        )
+        return obj.token
     
 
 

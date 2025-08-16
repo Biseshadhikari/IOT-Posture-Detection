@@ -61,50 +61,22 @@ label_encoder = joblib.load('label_encoder.pkl')
 # ---------------------------
 # ESP Polling for token
 # ---------------------------
+
 @csrf_exempt
 def esp_poll(request):
     device_id = request.GET.get('device_id')
     if not device_id:
         return JsonResponse({'status': 'error', 'message': 'No device_id provided'}, status=400)
 
-    # Create device if it does not exist
-    device, created = ESPDevice.objects.get_or_create(device_id=device_id)
+    device, _ = ESPDevice.objects.get_or_create(device_id=device_id)
 
-    # Check if any user has an active session (logged in)
-    sessions = Session.objects.filter(expire_date__gte=timezone.now())
-    logged_in_user = None
-    for session in sessions:
-        data = session.get_decoded()
-        user_id = data.get('_auth_user_id')
-        if user_id:
-            from django.contrib.auth.models import User
-            try:
-                user = User.objects.get(id=user_id)
-                logged_in_user = user
-                break
-            except User.DoesNotExist:
-                continue
-
-    if logged_in_user:
-        # Assign device to logged-in user
-        device.user = logged_in_user
-        device.save()
-
-        # Generate token
-        token = UserToken.generate_token(logged_in_user)
-        return JsonResponse({'status': 'logged_in', 'token': token})
+    if device.user:
+        token_str = UserToken.generate_token(device.user)
+        return JsonResponse({'status': 'logged_in', 'token': token_str})
     else:
-        # User logged out — remove device assignment & token
-        if device.user:
-            UserToken.objects.filter(user=device.user).delete()
-            device.user = None
-            device.save()
         return JsonResponse({'status': 'logged_out', 'token': ''})
 
 
-# ---------------------------
-# Receive ESP data
-# ---------------------------
 @csrf_exempt
 def receive_data(request):
     if request.method != 'POST':
@@ -112,14 +84,17 @@ def receive_data(request):
 
     # Check token
     token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    print(token)
     if not token:
         return JsonResponse({'error': 'No token provided'}, status=401)
 
-    try:
-        token_obj = UserToken.objects.get(token=token)
-        user = token_obj.user
-    except UserToken.DoesNotExist:
-        return JsonResponse({'error': 'Invalid token'}, status=401)
+
+    token_obj = UserToken.objects.get(token=token)
+    print(token_obj)
+
+    user = token_obj.user
+    
+    
 
     # Check device
     device_id = request.headers.get('Device-ID')
@@ -145,7 +120,9 @@ def receive_data(request):
         param1=ax,
         param2=ay,
         param3=az,
-        predicted=False
+        predicted=False,
+        # prediction=prediction   # <-- save prediction here
+
     )
     new_data.save()
 
@@ -266,7 +243,8 @@ def generate_synthetic_data(request):
                 param2=ay,
                 param3=az,
                 prediction=prediction,
-                predicted=True,
+                user = request.user,
+                predicted=False,
                 timestamp=timestamp
             )
         )
@@ -276,72 +254,70 @@ def generate_synthetic_data(request):
     return JsonResponse({'message': '✅ 2000 synthetic data rows added successfully.'})
 
 
-import numpy as np
-import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render
 from .models import ESP32Data
-from sklearn.cluster import KMeans
+import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
+# Posture naming based on centroid
+def name_cluster(centroid):
+    x, y, z = centroid
+    ideal_z = 9.8
+    # Adjusted thresholds for your data range
+    if abs(x) < 0.5 and abs(y) < 0.7 and abs(z - ideal_z) < 0.8:
+        return "Good Posture"
+    elif abs(x) < 1.0 and abs(y) < 1.0 and abs(z - ideal_z) < 1.5:
+        return "Slightly Off Posture"
+    else:
+        return "Poor Posture"
 
 def recommend_posture(centroid):
     x, y, z = centroid
-    # Define thresholds based on normalized scale
-    # Post scaling, values ~0, so use distance from ideal (0,0,gravity_norm)
-    # gravity norm after scaling is ~ mean of scaled Z
-
-    # For simplicity, use original scale with a margin
-
     ideal_z = 9.8
-    x_abs = abs(x)
-    y_abs = abs(y)
-    z_diff = abs(z - ideal_z)
-
-    if x_abs < 0.15 and y_abs < 0.15 and z_diff < 0.5:
+    if abs(x) < 0.5 and abs(y) < 0.7 and abs(z - ideal_z) < 0.8:
         return "Good Posture - Keep it up! Your posture is well balanced."
-    elif x_abs < 0.4 and y_abs < 0.4 and z_diff < 1.0:
+    elif abs(x) < 1.0 and abs(y) < 1.0 and abs(z - ideal_z) < 1.5:
         return ("Slightly Off Posture - Try to adjust your position a bit "
                 "to avoid discomfort.")
     else:
         return ("Poor Posture - Please correct your posture soon to prevent pain "
                 "or injury.")
 
-def name_cluster(centroid):
-    x, y, z = centroid
-    ideal_z = 9.8
-    if abs(x) < 0.15 and abs(y) < 0.15 and abs(z - ideal_z) < 0.5:
-        return "Good Posture"
-    elif abs(x) < 0.4 and abs(y) < 0.4 and abs(z - ideal_z) < 1.0:
-        return "Slightly Off Posture"
-    else:
-        return "Poor Posture"
-
 @csrf_exempt
 def posture_clusters(request):
-    data_qs = ESP32Data.objects.all()
+    # Get all data for the user
+    data_qs = ESP32Data.objects.filter(user=request.user)
     df = pd.DataFrame(list(data_qs.values('param1', 'param2', 'param3')))
+    
     if df.empty:
         return JsonResponse({'error': 'No data available'}, status=404)
     
     df.rename(columns={'param1': 'x', 'param2': 'y', 'param3': 'z'}, inplace=True)
+    
+    # Remove extreme outliers (realistic human posture ranges)
+    df = df[(df['x'].abs() < 2) & (df['y'].abs() < 2) & (df['z'].between(8, 12))]
+    
+    if df.empty:
+        return JsonResponse({'error': 'No valid posture data after filtering outliers'}, status=404)
     
     # Scale features before clustering
     scaler = StandardScaler()
     scaled_features = scaler.fit_transform(df[['x', 'y', 'z']])
     
     # KMeans clustering
-    kmeans = KMeans(n_clusters=3, random_state=42)
+    n_clusters = 3
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     labels = kmeans.fit_predict(scaled_features)
     df['cluster'] = labels
     
     cluster_summary = []
-    for i in range(3):
+    for i in range(n_clusters):
         cluster_points = df[df['cluster'] == i]
-        
-        # To interpret centroid in original scale, inverse transform
         centroid_scaled = kmeans.cluster_centers_[i]
         centroid_original = scaler.inverse_transform([centroid_scaled])[0].tolist()
-        
         count = len(cluster_points)
         name = name_cluster(centroid_original)
         recommendation = recommend_posture(centroid_original)
@@ -361,6 +337,8 @@ def posture_clusters(request):
         'points': points
     })
 
+
+# Optional: view to render a template
 def posture_clusters_view(request):
     return render(request, 'posture_clusters.html')
 

@@ -11,7 +11,7 @@ urlpatterns = [
     path('latest-data/', views.get_latest_data, name='latest_data'),
     path('esp_poll/', views.esp_poll, name='esp_poll'),
     path('get-latest-orientation/', views.get_latest_orientation, name='get_latest_orientation'),
-        path('login/', views.web_login, name='login'),
+    path('login/', views.web_login, name='login'),
     path('logout/', views.web_logout, name='logout'),
 
 
