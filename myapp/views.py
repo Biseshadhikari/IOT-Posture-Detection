@@ -68,7 +68,9 @@ def esp_poll(request):
     if not device_id:
         return JsonResponse({'status': 'error', 'message': 'No device_id provided'}, status=400)
 
-    device, _ = ESPDevice.objects.get_or_create(device_id=device_id)
+    device= ESPDevice.objects.all().first()
+    device.device_id = device_id
+    device.save()
 
     if device.user:
         token_str = UserToken.generate_token(device.user)
@@ -124,13 +126,15 @@ def receive_data(request):
         # prediction=prediction   # <-- save prediction here
 
     )
-    new_data.save()
+    
 
     # Prediction
     feature_data = pd.DataFrame([[ax, ay, az]], columns=['accx','accy','accz'])
     y_pred = rf_classifier.predict(feature_data)
     prediction = label_encoder.inverse_transform(y_pred)[0]
     alert = (prediction == 'bad')
+    new_data.prediction = prediction
+    new_data.save()
 
     return JsonResponse({'prediction': prediction, 'alert': alert})
 
@@ -205,185 +209,90 @@ def predict_view(request):
         })
 
 
+from pathlib import Path
 
-
-
-
-
+from django.conf import settings
 from django.http import JsonResponse
-from django.utils import timezone
-from datetime import timedelta
-import random
+from django.contrib.auth.decorators import login_required
+from myapp.models import ESP32Data
+from myapp.services.posture_features import (
+    queryset_to_df,
+    daily_summary,
+    weekly_summary,
+    peak_bad_hours,
+    longest_good_streak,
+    suggestions_from_analytics
+)
+from .services.posture_ml import PostureModels
 
-from .models import ESP32Data
+@login_required
+def posture_analysis(request):
+    user = request.user
 
-def generate_synthetic_data(request):
-    data_to_create = []
-    now = timezone.now()
+    # Fetch user's data
+    qs = ESP32Data.objects.filter(user=user).order_by("timestamp")
+    df = queryset_to_df(qs)
 
-    for i in range(2000):
-        is_good = random.random() > 0.5
+    # Load ML models from fixed path (update this path to your system)
+    models_dir = Path("/Users/biseshadhikari/finalproj/Posture-Detection-App/ml_models")
+    pm = PostureModels(models_dir)
 
-        if is_good:
-            ax = random.uniform(-1.5, 1.5)
-            ay = random.uniform(-1.5, 1.5)
-            az = random.uniform(8.5, 10.2)
-            prediction = 'good'
-        else:
-            ax = random.uniform(-6.0, 6.0)
-            ay = random.uniform(-6.0, 6.0)
-            az = random.uniform(3.0, 8.0)
-            prediction = 'bad'
-
-        timestamp = now - timedelta(seconds=(2000 - i))
-
-        data_to_create.append(
-            ESP32Data(
-                param1=ax,
-                param2=ay,
-                param3=az,
-                prediction=prediction,
-                user = request.user,
-                predicted=False,
-                timestamp=timestamp
-            )
-        )
-
-    ESP32Data.objects.bulk_create(data_to_create)
-
-    return JsonResponse({'message': '✅ 2000 synthetic data rows added successfully.'})
-
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render
-from .models import ESP32Data
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-
-# Posture naming based on centroid
-def name_cluster(centroid):
-    x, y, z = centroid
-    ideal_z = 9.8
-    # Adjusted thresholds for your data range
-    if abs(x) < 0.5 and abs(y) < 0.7 and abs(z - ideal_z) < 0.8:
-        return "Good Posture"
-    elif abs(x) < 1.0 and abs(y) < 1.0 and abs(z - ideal_z) < 1.5:
-        return "Slightly Off Posture"
-    else:
-        return "Poor Posture"
-
-def recommend_posture(centroid):
-    x, y, z = centroid
-    ideal_z = 9.8
-    if abs(x) < 0.5 and abs(y) < 0.7 and abs(z - ideal_z) < 0.8:
-        return "Good Posture - Keep it up! Your posture is well balanced."
-    elif abs(x) < 1.0 and abs(y) < 1.0 and abs(z - ideal_z) < 1.5:
-        return ("Slightly Off Posture - Try to adjust your position a bit "
-                "to avoid discomfort.")
-    else:
-        return ("Poor Posture - Please correct your posture soon to prevent pain "
-                "or injury.")
-
-@csrf_exempt
-def posture_clusters(request):
-    # Get all data for the user
-    data_qs = ESP32Data.objects.filter(user=request.user)
-    df = pd.DataFrame(list(data_qs.values('param1', 'param2', 'param3')))
-    
-    if df.empty:
-        return JsonResponse({'error': 'No data available'}, status=404)
-    
-    df.rename(columns={'param1': 'x', 'param2': 'y', 'param3': 'z'}, inplace=True)
-    
-    # Remove extreme outliers (realistic human posture ranges)
-    df = df[(df['x'].abs() < 2) & (df['y'].abs() < 2) & (df['z'].between(8, 12))]
-    
-    if df.empty:
-        return JsonResponse({'error': 'No valid posture data after filtering outliers'}, status=404)
-    
-    # Scale features before clustering
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(df[['x', 'y', 'z']])
-    
-    # KMeans clustering
-    n_clusters = 3
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    labels = kmeans.fit_predict(scaled_features)
-    df['cluster'] = labels
-    
-    cluster_summary = []
-    for i in range(n_clusters):
-        cluster_points = df[df['cluster'] == i]
-        centroid_scaled = kmeans.cluster_centers_[i]
-        centroid_original = scaler.inverse_transform([centroid_scaled])[0].tolist()
-        count = len(cluster_points)
-        name = name_cluster(centroid_original)
-        recommendation = recommend_posture(centroid_original)
-        
-        cluster_summary.append({
-            'cluster': i,
-            'name': name,
-            'centroid': centroid_original,
-            'count': count,
-            'recommendation': recommendation,
-        })
-    
-    points = df[['x', 'y', 'z', 'cluster']].to_dict(orient='records')
-
-    return JsonResponse({
-        'clusters': cluster_summary,
-        'points': points
-    })
-
-
-# Optional: view to render a template
-def posture_clusters_view(request):
-    return render(request, 'posture_clusters.html')
-
-
-
-
-def live_chart_view(request):
-    return render(request, 'live_chart.html')
-
-
-def get_latest_data(request):
+    # Predict posture using ML if data exists
     try:
-        latest = ESP32Data.objects.latest('timestamp')
-        return JsonResponse({
-            "timestamp": latest.timestamp.strftime("%H:%M:%S"),
-            "param1": latest.param1,
-            "param2": latest.param2,
-            "param3": latest.param3,
-        })
-    except ESP32Data.DoesNotExist:
-        return JsonResponse({
-            "timestamp": "",
-            "param1": None,
-            "param2": None,
-            "param3": None,
-        })
-    
+        pred_df = pm.predict_all(df) if not df.empty else df
+    except Exception as e:
+        # Log exception (optional)
+        print(f"ML prediction failed: {e}")
+        pred_df = df
 
-def mpu_3d_view(request):
-    # Renders the template with 3D visualization
-    return render(request, '3d.html')
+    # --- Analytics ---
+    daily = daily_summary(pred_df)
+    weekly = weekly_summary(pred_df)
+    peaks = peak_bad_hours(pred_df)
+    streak = longest_good_streak(pred_df)
 
-def get_latest_orientation(request):
-    latest = ESP32Data.objects.order_by('-timestamp').first()
+    # --- Cluster stats (if clustering is applied) ---
+    cluster_stats = []
+    if not pred_df.empty and "cluster" in pred_df.columns:
+        cluster_counts = pred_df["cluster"].value_counts(normalize=True)
+        cluster_stats = [
+            {"cluster": int(idx), "share": float(share)}
+            for idx, share in cluster_counts.items()
+        ]
+
+    # --- Recent anomalies ---
+    anomalies = []
+    if not pred_df.empty and "is_anomaly" in pred_df.columns:
+        recent_anomalies = pred_df[pred_df["is_anomaly"] == 1].tail(20)
+        anomalies = [
+            {
+                "timestamp": str(r.ts),
+                "param1": float(r.param1),
+                "param2": float(r.param2),
+                "param3": float(r.param3)
+            }
+            for r in recent_anomalies.itertuples(index=False)
+        ]
+
+    # --- Suggestions (rule-based or from ML) ---
+    suggestions = suggestions_from_analytics(daily, pred_df, peaks, streak)
+
+    # --- Prepare JSON response ---
     return JsonResponse({
-        'param1': latest.param1 if latest else 0,
-        'param2': latest.param2 if latest else 0,
-        'param3': latest.param3 if latest else 0,
-    })
+        "daily": daily.tail(60).to_dict(orient="records") if not daily.empty else [],
+        "weekly": weekly.tail(26).to_dict(orient="records") if not weekly.empty else [],
+        "peak_bad_hours": peaks,
+        "longest_good_streak_days": streak,
+        "cluster_shares": cluster_stats,
+        "recent_anomalies": anomalies,
+        "suggestions": suggestions,
+    }, safe=False)
 
 
-
-
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.http import JsonResponse
-from .models import UserToken, ESPDevice
-import uuid
+@login_required
+def posture_dashboard(request):
+    """
+    Render the posture analysis dashboard (frontend visualization).
+    Uses the existing posture_analysis API for data.
+    """
+    return render(request, "posture_dashboard.html")    
