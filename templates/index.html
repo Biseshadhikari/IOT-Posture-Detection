@@ -1,22 +1,24 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Data Predictions</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+{% extends "base.html" %}
+{% block content %}
+    <!-- Main Content Area -->
+    <div class="flex-1 p-10 overflow-y-auto w-full min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div class="bg-gray-800 shadow-2xl rounded-2xl p-10 max-w-md w-full transform transition duration-500 hover:scale-105 hover:shadow-3xl text-center border border-gray-700">
+            <!-- Icon + Title -->
+            <div class="flex flex-col items-center space-y-5">
+                <!-- A dynamic SVG icon to represent data and predictions -->
+                <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" class="h-16 w-16 text-indigo-500 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <h1 class="text-4xl font-extrabold text-gray-100">IOT Based Posture Predictions</h1>
+                <p class="text-gray-400 mt-2">View real-time data and predictions from your connected device.</p>
+            </div>
 
-    <div class="bg-white shadow-lg rounded-lg p-8 max-w-md text-center">
-        <h1 class="text-3xl font-bold text-gray-700 mb-6">Welcome to ESP32 Data Predictions</h1>
-        <p class="text-gray-600 mb-8">Click the button below to view the latest predictions from your ESP32 data.</p>
-        
-        <!-- Button to go to the predictions page -->
-        <a href="{% url 'predict' %}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">
-            View Predictions
-        </a>
+            <!-- Call to Action Button -->
+            <div class="mt-8">
+                <a href="{% url 'predict' %}" class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition duration-300 transform hover:-translate-y-1 hover:scale-105">
+                    View Predictions
+                </a>
+            </div>
+        </div>
     </div>
-
-</body>
-</html>
+{% endblock content %}

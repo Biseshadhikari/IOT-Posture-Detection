@@ -1,6 +1,6 @@
 import json
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render,redirect
 from .models import ESP32Data
 import joblib
 import pandas as pd
@@ -24,9 +24,19 @@ from django.utils import timezone
 from .models import ESP32Data, UserToken, ESPDevice
 import pandas as pd
 import joblib
+from django.shortcuts import render
+from django.utils import timezone
+from .models import ESP32Data
+from datetime import timedelta
+import pandas as pd
+from sklearn.cluster import KMeans
+import numpy as np
+from django.contrib.auth import login,logout,authenticate
 
 # Web login view
 def web_login(request):
+    if request.user.is_authenticated: 
+        return redirect('/')
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
@@ -48,9 +58,8 @@ def web_login(request):
 def web_logout(request):
     user = request.user
     # Delete the token when user logs out
-    UserToken.objects.filter(user=user).delete()
     logout(request)  # Django logout
-    return redirect('login')
+    return redirect('/login')
 
 
 # Load model and label encoder

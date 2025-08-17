@@ -1,98 +1,68 @@
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Posture Analysis Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { background: #f8f9fa; }
-        .card { border-radius: 1rem; }
-    </style>
-</head>
-<body>
-<div class="container py-4">
-    <h1 class="mb-4">Posture Analysis Dashboard</h1>
+
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 p-10 overflow-y-auto bg-gradient-to-r from-gray-900 via-gray-800 to-black text-gray-100">
+
+    <h1 class="text-3xl font-bold mb-8">Posture Analysis Dashboard</h1>
 
     <!-- Charts -->
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">Daily Good Posture Rate</div>
-                <div class="card-body">
-                    <canvas id="dailyChart" height="200"></canvas>
-                </div>
-            </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-indigo-400 mb-4">Daily Good Posture Rate</h2>
+            <canvas id="dailyChart" height="200"></canvas>
         </div>
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-success text-white">Weekly Good Posture Rate</div>
-                <div class="card-body">
-                    <canvas id="weeklyChart" height="200"></canvas>
-                </div>
-            </div>
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-green-400 mb-4">Weekly Good Posture Rate</h2>
+            <canvas id="weeklyChart" height="200"></canvas>
         </div>
     </div>
 
-    <!-- Cluster + Peak Hours -->
-    <div class="row g-4 mt-1">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-warning">Peak Bad Posture Hours</div>
-                <div class="card-body">
-                    <ul id="peakHours" class="list-group"></ul>
-                </div>
-            </div>
+    <!-- Peak Hours + Clusters -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-yellow-400 mb-4">Peak Bad Posture Hours</h2>
+            <ul id="peakHours" class="space-y-2"></ul>
         </div>
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-info text-white">Posture Patterns (Clusters)</div>
-                <div class="card-body">
-                    <canvas id="clusterChart" height="200"></canvas>
-                </div>
-            </div>
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-cyan-400 mb-4">Posture Patterns (Clusters)</h2>
+            <canvas id="clusterChart" height="200"></canvas>
         </div>
     </div>
 
     <!-- Streak + Suggestions -->
-    <div class="row g-4 mt-1">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-secondary text-white">Longest Good Streak</div>
-                <div class="card-body text-center">
-                    <h3 id="goodStreak"></h3>
-                </div>
-            </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6 text-center">
+            <h2 class="text-xl font-semibold text-gray-300 mb-4">Longest Good Streak</h2>
+            <h3 id="goodStreak" class="text-3xl font-bold text-green-400"></h3>
         </div>
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-dark text-white">AI Suggestions</div>
-                <div class="card-body">
-                    <ul id="suggestions" class="list-group list-group-flush"></ul>
-                </div>
-            </div>
+        <div class="bg-gray-800 shadow-lg rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-gray-300 mb-4">AI Suggestions</h2>
+            <ul id="suggestions" class="space-y-2"></ul>
         </div>
     </div>
 
     <!-- Anomalies -->
-    <div class="row g-4 mt-1">
-        <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header bg-danger text-white">Recent Anomalies</div>
-                <div class="card-body">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr><th>Timestamp</th><th>Param1</th><th>Param2</th><th>Param3</th></tr>
-                        </thead>
-                        <tbody id="anomaliesTable"></tbody>
-                    </table>
-                </div>
-            </div>
+    <div class="bg-gray-800 shadow-lg rounded-2xl p-6 mt-6">
+        <h2 class="text-xl font-semibold text-red-400 mb-4">Recent Anomalies</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-700 text-gray-300">
+                        <th class="p-2">Timestamp</th>
+                        <th class="p-2">Param1</th>
+                        <th class="p-2">Param2</th>
+                        <th class="p-2">Param3</th>
+                    </tr>
+                </thead>
+                <tbody id="anomaliesTable" class="divide-y divide-gray-700"></tbody>
+            </table>
         </div>
     </div>
 </div>
 
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 async function loadAnalysis() {
     const res = await fetch("{% url 'posture_analysis' %}");
@@ -109,8 +79,8 @@ async function loadAnalysis() {
             datasets: [{
                 label: "% Good Posture",
                 data: dailyRates,
-                borderColor: "blue",
-                backgroundColor: "rgba(0,123,255,0.2)",
+                borderColor: "#6366f1",
+                backgroundColor: "rgba(99,102,241,0.2)",
                 fill: true,
                 tension: 0.3
             }]
@@ -129,7 +99,7 @@ async function loadAnalysis() {
             datasets: [{
                 label: "% Good Posture",
                 data: weekRates,
-                backgroundColor: "rgba(40,167,69,0.6)"
+                backgroundColor: "rgba(34,197,94,0.6)"
             }]
         },
         options: { scales: { y: { min: 0, max: 100 } } }
@@ -143,7 +113,7 @@ async function loadAnalysis() {
                 labels: data.cluster_shares.map(c => "Cluster " + c.cluster),
                 datasets: [{
                     data: data.cluster_shares.map(c => c.share * 100),
-                    backgroundColor: ["#007bff", "#28a745", "#ffc107", "#dc3545"]
+                    backgroundColor: ["#6366f1", "#22c55e", "#eab308", "#ef4444"]
                 }]
             }
         });
@@ -153,11 +123,11 @@ async function loadAnalysis() {
     const peakHoursEl = document.getElementById("peakHours");
     peakHoursEl.innerHTML = "";
     if (data.peak_bad_hours.length === 0) {
-        peakHoursEl.innerHTML = "<li class='list-group-item'>No bad posture peaks detected.</li>";
+        peakHoursEl.innerHTML = "<li class='text-gray-400'>No bad posture peaks detected.</li>";
     } else {
         data.peak_bad_hours.forEach(p => {
             const li = document.createElement("li");
-            li.className = "list-group-item";
+            li.className = "p-2 bg-gray-700 rounded-lg";
             li.innerText = `${p.hour}:00 — ${p.count} bad postures`;
             peakHoursEl.appendChild(li);
         });
@@ -171,7 +141,7 @@ async function loadAnalysis() {
     suggEl.innerHTML = "";
     data.suggestions.forEach(s => {
         const li = document.createElement("li");
-        li.className = "list-group-item";
+        li.className = "p-2 bg-gray-700 rounded-lg";
         li.innerText = s;
         suggEl.appendChild(li);
     });
@@ -181,12 +151,16 @@ async function loadAnalysis() {
     tableBody.innerHTML = "";
     data.recent_anomalies.forEach(a => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${a.timestamp}</td><td>${a.param1.toFixed(2)}</td><td>${a.param2.toFixed(2)}</td><td>${a.param3.toFixed(2)}</td>`;
+        tr.className = "hover:bg-gray-700";
+        tr.innerHTML = `
+            <td class="p-2">${a.timestamp}</td>
+            <td class="p-2">${a.param1.toFixed(2)}</td>
+            <td class="p-2">${a.param2.toFixed(2)}</td>
+            <td class="p-2">${a.param3.toFixed(2)}</td>`;
         tableBody.appendChild(tr);
     });
 }
 
 loadAnalysis();
 </script>
-</body>
-</html>
+{% endblock content %}

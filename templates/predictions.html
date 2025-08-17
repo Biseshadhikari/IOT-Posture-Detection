@@ -1,61 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prediction Result</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Reload the page every 2 seconds
-        setInterval(function() {
-            window.location.reload();
-        },1300);
-    </script>
-</head>
-<body class=" {% if prediction == 'bad' %} bg-red-500 {% elif prediction == 'good' %} bg-green-500 {% else %} bg-white{% endif %}min-h-screen flex items-center justify-center">
 
-    <div class="bg-white shadow-md rounded-lg p-6 max-w-lg w-full">
-        <h1 class="text-2xl font-bold text-gray-700 mb-4">Prediction Results</h1>
-        
-        {% if error %}
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                <strong class="font-bold">Error!</strong>
-                <span class="block sm:inline">{{ error }}</span>
-            </div>
-        {% else %}
-            <div class="space-y-4">
-                <!-- Display Parameters -->
-                <div class="flex justify-between items-center bg-blue-100 p-4 rounded-lg">
-                    <span class="font-semibold text-gray-700">Param 1:</span>
-                    <span class="text-gray-900">{{ param1 }}</span>
+{% extends "base.html" %}
+
+<!-- The 'title' block is replaced to set a specific title for this page -->
+{% block title %}Prediction Result{% endblock %}
+
+<!-- The 'content' block contains all the unique content for this page. -->
+{% block content %}
+    <!-- Main Content Area -->
+    <div class="flex-1 p-10 overflow-y-auto w-full min-h-screen flex items-center justify-center">
+
+        <div class="bg-gray-900 shadow-lg rounded-xl p-8 max-w-lg w-full transition-transform transform {% if prediction == 'bad' %} ring-4 ring-red-500 {% elif prediction == 'good' %} ring-4 ring-green-500 {% else %} ring-4 ring-gray-600 {% endif %}">
+            <h1 class="text-3xl font-bold text-gray-100 mb-6 text-center">Prediction Results</h1>
+
+            {% if error %}
+                <div class="bg-red-700 border border-red-500 text-red-100 px-4 py-3 rounded-lg relative" role="alert">
+                    <strong class="font-bold">Error!</strong>
+                    <span class="block sm:inline">{{ error }}</span>
                 </div>
+            {% else %}
+                <div class="space-y-6">
+                    <!-- Display Parameters -->
+                    <div class="flex justify-between items-center bg-gray-700 p-4 rounded-lg shadow-inner">
+                        <span class="font-semibold text-gray-300">Param 1:</span>
+                        <span class="text-white">{{ param1 }}</span>
+                    </div>
 
-                <div class="flex justify-between items-center bg-blue-100 p-4 rounded-lg">
-                    <span class="font-semibold text-gray-700">Param 2:</span>
-                    <span class="text-gray-900">{{ param2 }}</span>
-                </div>
+                    <div class="flex justify-between items-center bg-gray-700 p-4 rounded-lg shadow-inner">
+                        <span class="font-semibold text-gray-300">Param 2:</span>
+                        <span class="text-white">{{ param2 }}</span>
+                    </div>
 
-                <div class="flex justify-between items-center bg-blue-100 p-4 rounded-lg">
-                    <span class="font-semibold text-gray-700">Param 3:</span>
-                    <span class="text-gray-900">{{ param3 }}</span>
-                </div>
+                    <div class="flex justify-between items-center bg-gray-700 p-4 rounded-lg shadow-inner">
+                        <span class="font-semibold text-gray-300">Param 3:</span>
+                        <span class="text-white">{{ param3 }}</span>
+                    </div>
 
-
-
-                <!-- Display Prediction Result -->
-                <div class="mt-6">
-                    <h2 class="text-xl font-semibold text-gray-600">Prediction Result:</h2>
-                    <div class="text-2xl font-bold text-gray-900 mt-2">
-                        {{ prediction|default:"N/A" }}
+                    <!-- Display Prediction Result -->
+                    <div class="mt-8 text-center">
+                        <h2 class="text-xl font-semibold text-gray-300">Prediction Result:</h2>
+                        <div class="text-5xl font-extrabold mt-2 uppercase
+                            {% if prediction == 'bad' %} text-red-500 {% elif prediction == 'good' %} text-green-500 {% else %} text-gray-400{% endif %}">
+                            {{ prediction|default:"N/A" }}
+                        </div>
                     </div>
                 </div>
+            {% endif %}
 
-                
-            </div>
-
-        {% endif %}
-        <div class="text-blue-500 pt-2">Page auto refreshes in 2 seconds</div>
+           
+        </div>
     </div>
 
-</body>
-</html>
+    <!-- Auto refresh script -->
+    <script>
+        setInterval(function() {
+            window.location.reload();
+        }, 1300);
+    </script>
+{% endblock content %}

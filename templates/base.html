@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posture Optimization</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+        }
+        .dark-theme-bg {
+            background-color: #1a202c; /* Dark gray */
+            color: #e2e8f0; /* Light gray */
+        }
+    </style>
+</head>
+<body class="dark-theme-bg">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-900 shadow-xl rounded-r-xl p-6 flex flex-col justify-between">
+            <div>
+                <!-- Dashboard Logo/Title -->
+                <div class="flex items-center space-x-2 text-xl font-bold mb-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span>Dashboard</span>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav>
+                    <ul>
+                        <li class="mb-4">
+                            <a href="/" 
+                               class="flex items-center space-x-2 p-3 rounded-lg transition-colors duration-200
+                               {% if request.path == '/' %} bg-gray-700 text-white {% else %} text-gray-300 hover:bg-gray-700 hover:text-white {% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                </svg>
+                                <span>Home</span>
+                            </a>
+                        </li>
+                        <li class="mb-4">
+                            <a href="/posture/dashboard" 
+                               class="flex items-center space-x-2 p-3 rounded-lg transition-colors duration-200
+                               {% if request.path == '/posture/dashboard' %} bg-gray-700 text-white {% else %} text-gray-300 hover:bg-gray-700 hover:text-white {% endif %}">
+                                <span>Posture Overview and Report</span>
+                            </a>
+                        </li>
+                        <li class="mb-4">
+                            <a href="/predict" 
+                               class="flex items-center space-x-2 p-3 rounded-lg transition-colors duration-200
+                               {% if request.path == '/predict' %} bg-gray-700 text-white {% else %} text-gray-300 hover:bg-gray-700 hover:text-white {% endif %}">
+                                <span>Real Time Posture Optimization</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+
+            <!-- Logout Button -->
+            <a href="/logout" 
+               class="flex items-center justify-center p-3 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span class="ml-2">Logout</span>
+            </a>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 p-6 overflow-y-auto">
+            {% block content %}{% endblock content %}
+        </div>
+    </div>
+</body>
+</html>
